@@ -46,4 +46,8 @@ The main focus is on **Object-Oriented Design (OOD)**, code quality, correctness
 5. Repeat for every plane in the CSV file.
 6. Combine the images into an MP4 video.
 
+    ## Documentation
+
+- [Software Requirements Specification (SRS)](SRS.md)
+
 The projection algorithm supports planes defined by either **3 points (isosceles triangle)** or **4 points (isosceles trapezoid)**.
