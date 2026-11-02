@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import dist, isfinite
+from math import dist, isfinite, ulp
+from numbers import Real
 from typing import Sequence
 
 import numpy as np
@@ -23,7 +24,7 @@ class Point3D:
     z: float
 
     def __post_init__(self) -> None:
-        if not all(isfinite(v) for v in (self.x, self.y, self.z)):
+        if not all(isinstance(v, Real) and isfinite(v) for v in (self.x, self.y, self.z)):
             raise InvalidPlaneError("Point coordinates must be finite numbers")
 
     def as_array(self) -> np.ndarray:
@@ -66,7 +67,10 @@ class Plane:
 
     @classmethod
     def from_points(cls, points: Sequence[Point3D]) -> Plane:
-        result = cls(tuple(points))
+        try:
+            result = cls(tuple(points))
+        except TypeError as exc:
+            raise InvalidPlaneError("Plane points must be a sequence of Point3D instances") from exc
         result.validate()
         return result
 
@@ -84,6 +88,8 @@ class Plane:
         return EdgePair(a1, b, a2, c)
 
     def validate(self) -> None:
+        if not isinstance(EPS, Real) or not isfinite(EPS) or EPS <= 0:
+            raise InvalidPlaneError("EPS must be a finite positive tolerance")
         if len(self.points) not in (3, 4):
             raise InvalidPlaneError("A plane requires exactly 3 or 4 points")
         if not all(isinstance(point, Point3D) for point in self.points):
@@ -95,8 +101,10 @@ class Plane:
             _finite_lengths(lab, lac, lbc)
             if min(lab, lac, lbc) <= 0:
                 raise InvalidPlaneError("Triangle has coincident vertices")
-            if np.linalg.norm(np.cross(ab, ac)) / (lab * lac) <= _DEGENERATE_SINE:
+            if np.linalg.norm(np.cross(ab / lab, ac / lac)) <= _DEGENERATE_SINE:
                 raise InvalidPlaneError("Triangle vertices are collinear")
+            if abs(lab - lac) >= EPS:
+                raise InvalidPlaneError("Triangle sides must have equal lengths (difference < EPS=0.001)")
             return
 
         a1, a2, b, c = (p.as_array() for p in self.points)
@@ -106,16 +114,20 @@ class Plane:
         _finite_lengths(leg1, leg2, top_len, bottom_len)
         if min(leg1, leg2, top_len, bottom_len) <= 0:
             raise InvalidPlaneError("Trapezoid contains a zero-length edge")
-        if top_len - bottom_len > EPS:
+        # Base order has no EPS allowance in the specification. Permit only
+        # floating-point roundoff for mathematically equal rotated bases.
+        if top_len - bottom_len > 8 * max(ulp(top_len), ulp(bottom_len)):
             raise InvalidPlaneError("Trapezoid top base must not exceed bottom base")
-        normal = np.cross(top, ab)
+        normal = np.cross(top / top_len, ab / leg1)
         normal_length = float(np.linalg.norm(normal))
-        if not isfinite(normal_length) or normal_length / (top_len * leg1) <= _DEGENERATE_SINE:
+        if not isfinite(normal_length) or normal_length <= _DEGENERATE_SINE:
             raise InvalidPlaneError("Trapezoid defining vertices are collinear")
         # Scale-aware: perpendicular *distance* to the plane, in voxel units.
         perpendicular_distance = abs(float(np.dot(c - a1, normal))) / normal_length
         if perpendicular_distance > EPS:
             raise InvalidPlaneError("Trapezoid vertices are not coplanar")
+        if abs(leg1 - leg2) >= EPS:
+            raise InvalidPlaneError("Trapezoid legs must have equal lengths (difference < EPS=0.001)")
         # No parallel-base restriction: the SRS calls it an optional check,
         # not part of the assignment's mandatory validation.
 

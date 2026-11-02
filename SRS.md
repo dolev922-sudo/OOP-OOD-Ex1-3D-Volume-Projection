@@ -1,8 +1,13 @@
 # Software Requirements Specification (SRS)
 
 **Project:** OOP-OOD-Ex1 — 3D Volume Projection  
-**Version:** 1.0  
-**Status:** Requirements specification (before implementation)
+**Version:** 1.1  
+**Status:** Requirements and implementation interpretations, audited 2026-11-02
+
+The original assignment PDF was not present in the inspected project,
+Downloads, Documents, or Desktop locations during this audit. Assignment
+rules quoted in the requested task and this specification are the available
+requirements source; this is not a claim of independent PDF verification.
 
 ## 1. Introduction
 
@@ -37,12 +42,21 @@ For a three-point plane `(a, b, c)`, the program shall check that the points for
 
 `|dist(a,b) - dist(a,c)| < 0.001`
 
+This comparison is strict: a difference equal to 0.001 is invalid.
+Equilateral triangles qualify. Coincident or collinear vertices are invalid.
+
 ### FR-04 — Validate four-point planes
 For a four-point plane `(a1, a2, b, c)`, the program shall check that:
 
 - `|dist(a1,b) - dist(a2,c)| < 0.001`
 - `dist(a1,a2) ≤ dist(b,c)`
 - The four points lie on the same plane.
+
+Equal-leg tolerance is strict, as for triangles. Base ordering does not use
+the leg tolerance; only eight floating-point ULPs are allowed for roundoff
+between mathematically equal lengths. Coplanarity is interpreted as a
+perpendicular distance at most 0.001 voxel units. Degenerate defining edges
+are rejected. Parallel bases are not an extra mandatory validation rule.
 
 ### FR-05 — Create a 2D projection
 For each valid plane, the program shall create a 2D image by sampling voxel values from the 3D volume along that plane, following the projection algorithm described in the assignment.
@@ -85,7 +99,17 @@ The solution shall use clear, modular, object-oriented design, with responsibili
 - Geometric comparison tolerance: `EPS = 0.001`.
 - This assignment does not require an interactive graphical interface, changes to the original NRRD file, or curved projections.
 
-**Details to finalize during design:** the exact CSV row format, how non-integer sampling coordinates map to voxel values, how image dimensions are rounded, video encoding settings, and the handling of invalid plane rows. The assignment does not fully define these behaviors; the design should document the chosen rules before implementation.
+**Documented implementation choices:** CSV points are `(a,b,c)` or
+`(a1,a2,b,c)` even when using the numeric point-count header. Sampling uses
+nearest-neighbor ties-to-even, testing bounds before rounding. Inclusive
+row interpolation and a common even black canvas are used. Video is H.264
+at 10 playback FPS. Invalid rows fail the entire operation; output publication
+is atomic. Signed int16 and the optional GUI are compatibility extensions.
+See [ALGORITHM.md](ALGORITHM.md) and [README.md](README.md) for details.
+
+Performance acceptance is reported separately for projection and projection
+plus encoding. Volume initialization, input loading, and warm-up are not in
+projection FPS. Ordinary tests do not enforce machine-dependent FPS thresholds.
 
 ## 6. Verification and Acceptance
 

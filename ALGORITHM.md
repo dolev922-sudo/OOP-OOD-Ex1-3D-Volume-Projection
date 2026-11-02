@@ -4,7 +4,8 @@
 
 Convert a plane defined by 3 or 4 points inside a 3D NRRD volume into a 2D grayscale image. Repeat for each plane in the CSV file, then combine the images into an MP4 video in CSV order.
 
-This document describes the **planned algorithm**, not measured results or completed implementation.
+This document describes the implemented algorithm and its explicit design
+choices, audited on 2026-11-02. Measurements belong in [EXPERIMENT_REPORT.md](EXPERIMENT_REPORT.md).
 
 ## 2. Supported Plane Shapes
 
@@ -15,7 +16,11 @@ The same projection procedure supports both shapes:
 
 `EPS = 0.001` (from the assignment).
 
-> **Design choice:** Also verify that the two trapezoid bases are parallel (within a numerical tolerance) so the supplied points form a genuine trapezoid. If the project's validator is intended to follow only the assignment's listed checks, this extra condition should be agreed upon before enforcing it.
+> **Validation decision:** Parallel bases are not enforced: the available
+> assignment rules require equal legs, ordered bases, and coplanarity only.
+> The strict leg test rejects a difference equal to EPS. Coplanarity uses
+> perpendicular distance <= EPS; base order allows only eight ULPs of
+> floating-point roundoff, not EPS-sized geometric differences.
 
 ## 3. Inputs and Outputs
 
@@ -34,7 +39,10 @@ Command-line interface requested by the assignment:
 python Ex0.py <file.nrrd> <file.csv> <file.mp4>
 ```
 
-The exact CSV row/coordinate layout, video encoding settings, and conversion of 16-/32-bit voxel values to 8-bit video intensities still need to be specified.
+CSV has 13 columns and points ordered `(a,b,c)` or `(a1,a2,b,c)`.
+The shape-name and numeric-count headers use the same point order. Video
+is H.264/YUV420p at 10 FPS. Unsigned video conversion retains the highest
+eight bits; signed int16 is a compatibility extension described in the README.
 
 ## 4. Geometry and Sampling
 
@@ -48,7 +56,10 @@ lerp(p, q, t) = p + t * (q - p)      // 0 <= t <= 1
 
 Use floating-point coordinates during sampling. Return a pixel intensity of `0` when the sampled position lies outside the volume.
 
-**Sampling decision:** Start with *nearest-neighbor* sampling: round each coordinate to the nearest voxel index, then read that voxel. This is an implementation choice; the assignment describes `M[p]` but does not specify how fractional coordinates must be sampled. Other sampling methods, such as trilinear interpolation, could be added later.
+**Sampling decision:** Nearest-neighbor, ties-to-even rounding. Test the
+original coordinates against inclusive `[0,size-1]` bounds first; outside
+positions return zero even if rounding would bring them inside. The
+assignment describes `M[p]` without specifying fractional sampling.
 
 ### 4.2 Convert either shape into two side edges
 
@@ -63,7 +74,8 @@ Because both shapes now have two side edges, they can share the same rasterizati
 
 ### 4.3 Image size and pixel mapping
 
-Let `L` be the common length of the two side edges, and let `B` be the bottom-edge length. Since distances are real numbers while image dimensions are integers, this design uses:
+Let `L` be the longer of the two near-equal accepted side edges, and `B` the
+bottom-edge length. Since distances are real but dimensions are integers:
 
 ```text
 height = max(2, round(L) + 1)
@@ -101,7 +113,7 @@ FUNCTION projectPlane(volume M, points):
         (leftTop, leftBottom)   = (a1, b)
         (rightTop, rightBottom) = (a2, c)
 
-    sideLength = distance(leftTop, leftBottom)
+    sideLength = max(distance(leftTop, leftBottom), distance(rightTop, rightBottom))
     baseLength = distance(leftBottom, rightBottom)
     height = max(2, round(sideLength) + 1)
     width = max(2, round(baseLength) + 1)
@@ -145,17 +157,19 @@ For trapezoid coplanarity, one useful test is whether the scalar triple product 
 FUNCTION run(nrrdPath, csvPath, mp4Path):
     volume = loadNRRD(nrrdPath)
     planes = parseCSV(csvPath)
-    frames = empty list
-
-    FOR each plane IN planes IN INPUT ORDER:
-        image = projectPlane(volume, plane.points)
-        frame = convertToVideoFrame(image)
-        append frame to frames
-
-    encodeMP4(frames, mp4Path)
+    validate all planes and find the shared even-sized canvas
+    OPEN temporary MP4 encoder beside the output path
+        FOR each plane IN planes IN INPUT ORDER:
+            image = projectPlane(volume, plane.points)
+            frame = centerOnBlackCanvas(convertToVideoFrame(image))
+            write frame
+    CLOSE encoder and atomically replace output on success
+    REMOVE temporary file on failure, preserving existing output
 ```
 
-The encoder requires a consistent frame size, so **frame resizing or padding must be specified** if the planes produce images of different dimensions. The output video frame rate must also be chosen. Neither policy is defined by the assignment; both belong in implementation decisions.
+All frames use the maximum height/width rounded up to even numbers, with
+centered black padding and no resizing. Only one projected frame is held
+at a time. Playback is 10 FPS, independent of processing FPS.
 
 ## 8. Suggested OOP Design
 
@@ -190,13 +204,11 @@ The assignment requires **at least 30 frames per second** and targets **100+ FPS
 
 For a single plane, the projection loops over approximately `height × width` pixel positions, so time complexity is **O(height × width)**, assuming constant-time voxel access. The image uses **O(height × width)** space. To reduce memory use, frames can be streamed into the video encoder instead of storing all frames at once.
 
-## 11. Design Questions to Finalize Before Coding
+## 11. Validation evidence and limits
 
-- What is the exact CSV row format for 3-point and 4-point planes?
-- Which rounding rule should convert floating-point geometry to image dimensions and voxel indices?
-- How will 16- and 32-bit voxel values be scaled into video pixel values?
-- Should all frames be padded to the largest width/height or resized to a fixed resolution?
-- What output video FPS and codec should be used?
-- Should malformed CSV rows stop the entire program, or be reported and skipped?
-
-These are deliberately listed as open decisions rather than claiming the assignment specifies them.
+Exact expected matrices cover axis-aligned and tilted planes. An independent
+scalar implementation in the tests checks seeded rotations, out-of-bounds
+geometry, all unsigned bit depths, and different array memory layouts.
+The original PDF was unavailable for this audit. Inclusive interpolation,
+ties-to-even sampling, output padding, and intensity policies are explicit
+implementation interpretations rather than independently verified PDF rules.

@@ -1,5 +1,15 @@
 # השוואת פלטים: הפרויקט המקומי מול `ASG1_OOP`
 
+> **Historical report — superseded by the 2026-11-02 validation fix.**
+> These measurements describe the earlier permissive implementation. The
+> current code rejects unequal legs, so this four-row input is not a valid
+> current demo. Identical CSV bytes also did NOT mean identical trapezoid
+> geometry: this project used `(a1,a2,b,c)`, while the compared project
+> reordered `(a1,b,a2,c)`. Aggregate means/ranges do not establish visual
+> similarity or pixel equivalence. Treat the measurements below as historical
+> observations, not proof of algorithm correctness. Current verification is
+> documented in [EXPERIMENT_REPORT.md](EXPERIMENT_REPORT.md).
+
 ## מטרת הבדיקה
 
 להריץ את שני המימושים על אותו קלט ולבדוק אם ההיטל של המישור התלת־ממדי דומה.
