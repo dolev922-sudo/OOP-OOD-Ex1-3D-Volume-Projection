@@ -65,7 +65,22 @@ class PlaneProjector:
         denominators = row_pixels[ys] - 1
         u = np.divide(js, denominators, out=np.zeros(len(js), dtype=np.float64),
                       where=denominators > 0)
-        samples = left[ys] + u[:, None] * (right[ys] - left[ys])
-        image = np.zeros((height, width), dtype=self.volume.data.dtype)
-        image[ys, xs] = self.volume.sample_many(samples)
+        delta = right[ys] - left[ys]
+        data = self.volume.data
+        shape = data.shape
+        # Construct each coordinate separately and directly gather the voxels.
+        # Keep the pre-rounding bounds test required by Volume.sample_many.
+        x = left[ys, 0] + u * delta[:, 0]
+        y = left[ys, 1] + u * delta[:, 1]
+        z = left[ys, 2] + u * delta[:, 2]
+        valid = ((x >= 0) & (x <= shape[0] - 1) &
+                 (y >= 0) & (y <= shape[1] - 1) &
+                 (z >= 0) & (z <= shape[2] - 1) &
+                 np.isfinite(x) & np.isfinite(y) & np.isfinite(z))
+        image = np.zeros((height, width), dtype=data.dtype)
+        if np.any(valid):
+            image[ys[valid], xs[valid]] = data[
+                np.rint(x[valid]).astype(np.intp),
+                np.rint(y[valid]).astype(np.intp),
+                np.rint(z[valid]).astype(np.intp)]
         return image
