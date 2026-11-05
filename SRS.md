@@ -1,67 +1,228 @@
-# Software Requirements Specification
+# Software Requirements Specification (SRS)
 
-**Project:** OOP/OOD Ex1 — 3D Volume Projection
+**Project:** 3D Volume Plane Projection  
+**Course:** Introduction to Software Engineering (OOP / OOD) — Ex1  
+**Version:** 1.0  
+**Date:** 2026-11-05
+
+> **Purpose of this document:** Define **what the system must do** and how to verify it. Details of **how the projection algorithm is implemented** belong in `ALGORITHM.md`.
+
+## At a glance
+
+| Input | Processing | Output |
+|---|---|---|
+| A 3D `.nrrd` volume and a `.csv` list of planes | Validate planes and create one 2D image for each plane | An `.mp4` video containing the images in CSV order |
+
+**Requirement types:**
+- **Functional requirements (FR):** What the system does.
+- **Non-functional requirements (NFR):** How well the system must work (speed, correctness, reliability, maintainability).
+
+---
 
 ## 1. Introduction
 
-**Purpose:** Convert planes sampled from a 3D NRRD volume into a sequence of 2D images saved as an MP4 video.
+### 1.1 Purpose
 
-**Scope:** Volume loading, plane validation, projection, and video export. Volume editing, curved projections, and interactive 3D visualization are out of scope.
+The system converts selected planes inside a 3D volume into 2D grayscale images and combines those images into a video.
 
-**Definitions:** A *voxel* is one volume element; a *plane* is defined by three or four points; *FPS* measures frames processed per second.
+### 1.2 Scope
 
-**Reference:** Ariel University, *Introduction to Software Engineering — Ex1: Algorithm: Implementing a plane projection of 3D volume*. The rules below reflect the available assignment excerpts; the original PDF was unavailable during review.
+**In scope:**
+- Load a 3D NRRD file.
+- Read an ordered list of planes from a CSV file.
+- Support planes described by **3 points (triangle)** or **4 points (trapezoid)**.
+- Generate one 2D projection per accepted plane.
+- Save the projections in an MP4 video.
+- Provide a command-line entry point and readable error messages.
 
-## 2. Overall description
+**Out of scope:** A graphical 3D editor, medical diagnosis, interactive visualization, and arbitrary polygon shapes.
 
-- **Product and users:** A standalone Python tool for students and users generating plane slices.
-- **Environment:** Python 3.10+, NumPy, and an FFmpeg-backed video writer.
-- **Inputs:** A 3D NRRD volume and a CSV listing planes in output order.
-- **Constraints:** Each volume axis has 1–1023 voxels; required voxel types are unsigned 8/16/32-bit integers.
-- **Assumptions:** Coordinates are voxel indices, sufficient RAM is available, and the output folder exists.
-- **Extensions:** Signed 16-bit input and an optional file picker are supported but are not core assignment requirements.
+### 1.3 Definitions
 
-## 3. Specific requirements
-
-### Functional requirements
-
-| ID | The system shall… |
+| Term | Meaning |
 |---|---|
-| FR-01 | Load a supported NRRD volume without changing its values or axis order. |
-| FR-02 | Read ordered CSV planes containing three or four finite 3D points. |
-| FR-03 | Accept triangle `(a,b,c)` only when `abs(dist(a,b)-dist(a,c)) < 0.001`; reject coincident or collinear vertices. |
-| FR-04 | Accept trapezoid `(a1,a2,b,c)` only when `abs(dist(a1,b)-dist(a2,c)) < 0.001`, the top base is no longer than the bottom, and the vertices are coplanar; reject degenerate geometry. |
-| FR-05 | Generate one 2D projection for each valid plane using the documented sampling rules. |
-| FR-06 | Use zero for sample positions outside the volume. |
-| FR-07 | Preserve CSV plane order in the output frames. |
-| FR-08 | Save the frames as one MP4 with consistent frame dimensions. |
-| FR-09 | Support the command-line interface below. |
+| **Voxel** | A 3D pixel with coordinates `(x, y, z)` and an intensity value. |
+| **NRRD** | File format storing the 3D volume. |
+| **Plane** | A region defined by three or four 3D points. |
+| **Projection** | A 2D image made by sampling voxel intensities on a plane. |
+| **FPS** | Frames processed per second (performance measurement). |
+| **EPS** | Allowed geometric difference; the assignment uses `0.001`. |
 
-### External interface
+### 1.4 References
+
+1. Ariel University, *Ex1: Algorithm — Implementing a Plane Projection of 3D Volume*, pages 1–3.
+2. Ariel University course slide, *SRS: what the system must do*.
+3. Project implementation and tests (`Ex0.py`, `benchmark.py`, and associated test files).
+
+---
+
+## 2. Overall Description
+
+### 2.1 Intended users
+
+Students, instructors, or developers who want to produce a sequence of 2D slices from a 3D volume.
+
+### 2.2 System workflow
+
+1. The user provides the **NRRD input**, **CSV input**, and **MP4 output** paths.
+2. The system loads and checks the 3D volume.
+3. The system reads the plane definitions in CSV order.
+4. The system validates each plane and calculates its 2D projection.
+5. The system writes the projected images as video frames.
+6. The system reports success or explains an input error.
+
+### 2.3 Operating environment
+
+The supplied project uses **Python 3.10+**, **NumPy**, and **OpenCV**. It runs from a terminal on a computer with sufficient memory for the volume.
+
+### 2.4 Constraints and assumptions
+
+- The volume is three-dimensional: `M[x, y, z]`.
+- Each dimension satisfies `1 <= size < 1024`.
+- Voxel values are unsigned **8-bit**, **16-bit**, or **32-bit** integers.
+- Plane coordinates are interpreted as **voxel-index coordinates** by this project (not physical millimeters).
+- A plane may extend outside the 3D volume; samples outside it become `0`.
+- The project processes one volume per execution.
+
+---
+
+## 3. Specific Requirements
+
+### 3.1 Functional requirements
+
+Each requirement has an ID so it can be referenced in code, tests, and reviews.
+
+| ID | The system shall... | How to verify |
+|---|---|---|
+| **FR-01** | Load a 3D NRRD file with unsigned 8-, 16-, or 32-bit voxels and dimensions of 1–1023 per axis. | Read sample files; check dimensions and voxel values. |
+| **FR-02** | Read a CSV containing one plane per row, described by 3 or 4 points in 3D. | Parse valid triangle and trapezoid rows. |
+| **FR-03** | Accept a triangle `(a, b, c)` only if `abs(dist(a,b) - dist(a,c)) < 0.001`, and reject invalid/degenerate triangles. | Test valid isosceles, equilateral, scalene and collinear cases. |
+| **FR-04** | Validate trapezoid `(a1, a2, b, c)`: equal side lengths within EPS, top edge no longer than bottom edge, and coplanar points. | Test valid trapezoids and invalid geometry. |
+| **FR-05** | Generate a 2D image for each accepted plane using the assignment's plane-sampling algorithm. | Compare results with an independent reference implementation. |
+| **FR-06** | Give an intensity of `0` to samples outside the 3D volume. | Test partially and fully out-of-bounds planes. |
+| **FR-07** | Preserve CSV plane order when generating video frames. | Compare the sequence of output frames to input rows. |
+| **FR-08** | Save the projected images in an MP4 video at the requested path. | Open the result and check its frames. |
+| **FR-09** | Support the required command-line invocation shown below. | Run it with real sample files. |
+| **FR-10** | Report missing, corrupt, or invalid inputs with readable messages, without an uncontrolled crash. | Test invalid files and malformed CSV rows. |
+
+**Required command:**
 
 ```bash
-python Ex0.py <volume.nrrd> <planes.csv> <output.mp4>
+python Ex0.py file.nrrd file.csv file.mp4
 ```
 
-CSV uses the header and point order documented in [README.md](README.md).
-Invalid input shall produce a descriptive error and a nonzero exit code.
+### 3.2 External interfaces
 
-### Non-functional requirements
+| Interface | Format | Role |
+|---|---|---|
+| Volume input | `.nrrd` | Contains the 3D voxel data. |
+| Plane input | `.csv` | Contains plane coordinates, one plane per row. |
+| Command line | `python Ex0.py ...` | Starts the processing pipeline. |
+| Video output | `.mp4` | Contains the projected 2D frames. |
 
-| ID | Requirement |
+**CSV format used by this project:** Three `(x,y,z)` coordinates = **9 numbers** for a triangle; four coordinates = **12 numbers** for a trapezoid.
+
+```csv
+# Triangle: a, b, c
+5,0,0,2,4,0,8,4,0
+# Trapezoid: a1, a2, b, c
+2,0,5,6,0,5,0,4,5,8,4,5
+```
+
+> The assignment requires a CSV list of coordinates but does not prescribe the exact column layout. The flat 9/12-number layout is a **project design decision**.
+
+### 3.3 Non-functional requirements
+
+| ID | Requirement | How to verify |
+|---|---|---|
+| **NFR-01 — Performance** | With a `500 × 500 × 500` **byte** volume, projection speed must exceed **30 FPS**; **100+ FPS** is the expected target. | Run `python benchmark.py --encode` and record measured speeds, hardware, and frame sizes. |
+| **NFR-02 — Correctness** | The output must match the specified projection rules, including geometry, sampling, and frame order. | Use unit tests and reference-image comparisons. |
+| **NFR-03 — Reliability** | Bad inputs must result in controlled errors; a failed run must not leave a misleading partial video. | Test invalid inputs and simulated output failures. |
+| **NFR-04 — Maintainability** | Input reading, geometry, projection, and video encoding must be separate, testable components. | Review architecture and test modules independently. |
+| **NFR-05 — Usability** | The required command must be straightforward, and success/error messages must be understandable. | Run successful and failing CLI examples. |
+
+> **Important:** The video playback rate (e.g., 30 FPS) is **not** the same as measured projection-processing FPS. Performance results depend on hardware and plane dimensions; do not claim the target is met without measurement.
+
+### 3.4 Project design decisions (not specified by the assignment)
+
+These choices make unspecified behavior predictable. They describe the supplied project and should not be confused with university requirements.
+
+| Topic | Project choice |
 |---|---|
-| NFR-01 | Process a 500×500×500-byte volume at more than 30 FPS, with 100+ FPS as the target; report measured projection-only and encoding-pipeline throughput separately. |
-| NFR-02 | Produce deterministic projections consistent with the documented geometry and sampling rules. |
-| NFR-03 | Handle invalid inputs and encoding failures without an uncontrolled crash, preserving existing output on failure. |
-| NFR-04 | Separate geometry, input loading, projection, and video writing into maintainable object-oriented components. |
+| CSV rows | 9 values for triangles; 12 for trapezoids; optional header, comments, and blank lines. |
+| Sampling | Nearest-neighbor voxel lookup. |
+| Rounding | Round-half-up (`floor(value + 0.5)`). |
+| Higher-bit-depth input | Use one volume-wide linear mapping to 8-bit grayscale for MP4 frames. |
+| Frames of different sizes | Center on a common black canvas without stretching. |
+| Playback speed | Default MP4 playback at 30 FPS. |
+| Invalid planes | Stop with a line-numbered error by default; optional `--skip-invalid` mode. |
+| NRRD metadata | Coordinates are voxel indices; physical orientation/spacing are not applied. |
 
-Performance targets are acceptance goals, not claims of achieved results.
-Playback FPS is independent of processing FPS.
+---
 
 ## 4. Appendices
 
-**Main use case:** Select inputs and an output path → validate → project each plane → save MP4.
+### Appendix A — Geometry rules
 
-**Design decisions:** Strict leg tolerance rejects equality at 0.001. Coplanarity uses perpendicular distance ≤ 0.001 voxel units; base ordering allows only floating-point roundoff. Parallel bases are not an extra check. Sampling, rounding, intensity conversion, and padding are defined in [ALGORITHM.md](ALGORITHM.md) and [README.md](README.md).
+**Triangle (3 points):** `a`, `b`, `c` must form an isosceles triangle:
 
-**Traceability:** [TEST_STRATEGY.md](TEST_STRATEGY.md) maps requirements to tests; [EXPERIMENT_REPORT.md](EXPERIMENT_REPORT.md) records verification and performance results.
+```text
+abs(dist(a, b) - dist(a, c)) < 0.001
+```
+
+**Trapezoid (4 points):** `a1`, `a2`, `b`, `c` must satisfy:
+
+```text
+abs(dist(a1, b) - dist(a2, c)) < 0.001
+dist(a1, a2) <= dist(b, c)
+a1, a2, b and c are coplanar
+```
+
+The project's floating-point checks allow a small EPS tolerance. The course handout describes the row-by-row projection algorithm; the exact implementation and its rounding choices belong in `ALGORITHM.md`.
+
+### Appendix B — Requirements traceability / test checklist
+
+| Test | Requirements | Expected result |
+|---|---|---|
+| T-01 | FR-01 | Correct NRRD dimensions and voxel values. |
+| T-02 | FR-02, FR-03, FR-04 | Correct plane parsing and geometry validation. |
+| T-03 | FR-05, NFR-02 | Correct pixels compared with the reference algorithm. |
+| T-04 | FR-06 | Out-of-volume samples equal zero. |
+| T-05 | FR-07, FR-08 | MP4 has the correct ordered frames. |
+| T-06 | FR-09, NFR-05 | Required command works. |
+| T-07 | NFR-01 | Benchmark reports real, measured FPS. |
+| T-08 | FR-10, NFR-03 | Errors are clear and controlled. |
+
+### Appendix C — Run and test the project
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Generate example inputs and a demonstration video
+python make_example_data.py
+
+# Run with your own inputs
+python Ex0.py input.nrrd planes.csv output.mp4
+
+# Run the automated tests
+pytest
+
+# Measure projection and video-processing performance
+python benchmark.py --encode
+```
+
+### Appendix D — Submission checklist
+
+- [ ] `README.md` describes the project and how to run it.
+- [x] `SRS.md` specifies the requirements.
+- [ ] `ALGORITHM.md` explains the detailed algorithm.
+- [ ] A representative NRRD dataset and CSV plane definitions are available.
+- [ ] The tests and testing strategy are documented.
+- [ ] The required command produces an MP4 demo.
+- [ ] Benchmark results are recorded **from an actual run**.
+- [ ] A short experiment summary describes the results.
+
+---
+
+**Document note:** This SRS separates assignment requirements from choices made in the supplied Python implementation. It describes intended and testable behavior; it is not a claim that every requirement has passed on every machine.
