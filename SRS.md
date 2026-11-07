@@ -5,8 +5,6 @@
 **Version:** 1.0  
 **Date:** 2026-11-05
 
-> **Purpose of this document:** Define **what the system must do** and how to verify it. Details of **how the projection algorithm is implemented** belong in `ALGORITHM.md`.
-
 ## At a glance
 
 | Input | Processing | Output |
@@ -214,14 +212,14 @@ python benchmark.py --encode
 
 ### Appendix D — Submission checklist
 
-- [ ] `README.md` describes the project and how to run it.
-- [x] `SRS.md` specifies the requirements.
-- [ ] `ALGORITHM.md` explains the detailed algorithm.
-- [ ] A representative NRRD dataset and CSV plane definitions are available.
-- [ ] The tests and testing strategy are documented.
-- [ ] The required command produces an MP4 demo.
-- [ ] Benchmark results are recorded **from an actual run**.
-- [ ] A short experiment summary describes the results.
+-  `README.md` describes the project and how to run it.
+-  `SRS.md` specifies the requirements.
+-  `ALGORITHM.md` explains the detailed algorithm.
+-  A representative NRRD dataset and CSV plane definitions are available.
+-  The tests and testing strategy are documented.
+-  The required command produces an MP4 demo.
+-  Benchmark results are recorded **from an actual run**.
+-  A short experiment summary describes the results.
 
 ---
 
