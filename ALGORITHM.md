@@ -42,7 +42,10 @@ python Ex0.py <file.nrrd> <file.csv> <file.mp4>
 
 CSV has 13 columns and points ordered `(a,b,c)` or `(a1,a2,b,c)`.
 The shape-name and numeric-count headers use the same point order. Video
-is H.264/YUV420p at 10 FPS. Intensity conversion is described in Section 7.
+is H.264/YUV420p at 10 FPS. The header is required, triangle rows have three
+empty trailing cells, blank rows are ignored, and comments are not supported.
+See [SRS CSV examples](SRS.md#32-external-interfaces) for the exact headers.
+Intensity conversion is described in Section 7.
 
 ## 4. Geometry and Sampling
 
@@ -231,7 +234,11 @@ These are the components in the current checkout.
 
 ## 10. Performance and Complexity
 
-The assignment requires **at least 30 frames per second** and targets **100+ FPS** on a `500 × 500 × 500` byte volume. These are requirements/targets, **not verified performance claims**.
+NFR-01 requires **more than 30 projection FPS** and targets **≥100 FPS** on a
+`500 × 500 × 500` `uint8` volume. Processing without encoding and end-to-end
+rates are reported separately. Playback remains 10 FPS. Hardware, workload,
+and actual measurements are recorded in
+[TEST_STRATEGY.md](TEST_STRATEGY.md#performance-results-measured-2026-11-08).
 
 For a single plane, vectorized NumPy operations construct the row/column map,
 select active pixels, interpolate coordinates, check bounds, and gather voxel
@@ -248,8 +255,10 @@ cover axis-aligned and tilted planes. An independent
 [scalar implementation](tests/reference_projection.py) checks seeded rotations,
 out-of-bounds geometry, all unsigned bit depths, and different array memory layouts.
 During the 2026-11-08 review, 216 direct comparisons against that reference
-passed. This was a focused check: the full projection test module could not
-be collected because it imports unavailable private NumPy types.
+passed. A later test-only correction replaced unavailable private NumPy
+annotation types with the public `np.ndarray` type. The full suite then
+passed **148 tests**, including all 60 projection tests, with the production
+algorithm and assertions unchanged. See [the execution record](TEST_STRATEGY.md#test-execution-record-2026-11-08).
 The original PDF was unavailable for this audit. Inclusive interpolation,
 ties-to-even sampling, output padding, and intensity policies are explicit
 implementation interpretations rather than independently verified PDF rules.

@@ -2,7 +2,6 @@
 from typing import Literal
 
 import numpy as np
-from numpy._core.multiarray import _Array, _Array1D
 import pytest
 
 from volume_projection import InvalidPlaneError, Plane, PlaneProjector, Point3D, Volume, VolumeFormatError
@@ -162,7 +161,7 @@ def test_rounding_half_to_even_and_nonfinite_samples():
                                   np.zeros((0, 2, 2), dtype=np.uint8),
                                   np.zeros((1024, 1, 1), dtype=np.uint8),
                                   np.zeros((2, 2, 2), dtype=np.float32)])
-def test_invalid_volume_arrays(data: _Array[tuple[Literal[2], Literal[2]], unsignedinteger] | _Array[tuple[Literal[0], Literal[2], Literal[2]], unsignedinteger] | _Array[tuple[Literal[1024], Literal[1], Literal[1]], unsignedinteger] | _Array[tuple[Literal[2], Literal[2], Literal[2]], floating]):
+def test_invalid_volume_arrays(data: np.ndarray):
     with pytest.raises(VolumeFormatError):
         Volume(data)
 
@@ -175,7 +174,7 @@ def test_unreasonable_projection_size_rejected():
 
 
 @pytest.mark.parametrize("points", [np.zeros(3), np.zeros((2, 2)), np.zeros((1, 3, 1))])
-def test_sample_array_wrong_shape(points: _Array1D[float64] | _Array[tuple[Literal[2], Literal[2]], float64] | _Array[tuple[Literal[1], Literal[3], Literal[1]], float64], gradient_volume: Volume):
+def test_sample_array_wrong_shape(points: np.ndarray, gradient_volume: Volume):
     with pytest.raises(ValueError, match="shape"):
         gradient_volume.sample_many(points)
 

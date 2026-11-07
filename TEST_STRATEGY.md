@@ -1,9 +1,9 @@
 # Test Strategy — 3D Volume Plane Projection
 
 **Project:** Introduction to Software Engineering (OOP / OOD), Ex1  
-**Document version:** 1.0  
-**Related documents:** [`SRS.md`](SRS.md), [`README.md`](README.md), [`ALGORITHM.md`](ALGORITHM.md) (where available)  
-**Status:** Test plan and verification instructions; not a claim that tests passed on the reader's machine.
+**Document version:** 1.1 — synchronized with the implementation on 2026-11-08\
+**Related documents:** [SRS.md](SRS.md), [README.md](README.md), [ALGORITHM.md](ALGORITHM.md)\
+**Status:** Test plan plus recorded execution evidence. The full automated suite passes (148 tests); the ≥100 FPS target has not been met, and standalone manual demo verification remains outstanding.
 
 ## Quick overview
 
@@ -16,7 +16,7 @@ We will verify four things:
 3. **Correct video:** The required command creates a playable MP4 with frames in CSV order.
 4. **Reliable and fast execution:** Errors are controlled, and measured processing speed meets the course requirement.
 
-> **Acceptance summary:** All required functional tests should pass, the demo should produce the expected MP4, and a measured benchmark on a `500 × 500 × 500` `uint8` volume should report **more than 30 processing FPS**. **100+ FPS** is the course's expected target, not the minimum pass threshold. Report both outcomes honestly.
+> **Acceptance summary:** All required functional tests should pass, the demo should produce the expected MP4, and a measured benchmark on a `500 × 500 × 500` `uint8` volume should report **more than 30 projection FPS**. **≥100 FPS** is the expected target, not the minimum pass threshold. Also report processing without encoding and end-to-end FPS separately. The full automated suite passes and recorded performance exceeds 30 FPS for all three stages; remaining manual checks are listed below.
 
 ---
 
@@ -24,52 +24,52 @@ We will verify four things:
 
 The purpose of testing is to show that the implemented system meets the behaviors in [`SRS.md`](SRS.md) and the assignment brief, not only that individual functions run.
 
-**In scope:** file loading; unsigned 8/16/32-bit voxel data; CSV parsing; triangle/trapezoid validation; coordinate rounding and nearest-neighbor sampling; out-of-volume zero values; projection dimensions and pixels; intensity conversion; frame layout and order; MP4 writing; CLI behavior; error handling; and measured speed.
+**In scope:** file loading; unsigned 8/16/32-bit voxel data and the signed-int16 extension; CSV parsing; triangle/trapezoid validation; coordinate rounding and nearest-neighbor sampling; out-of-volume raw zero values; projection dimensions and pixels; intensity conversion; frame layout and order; MP4 writing; CLI behavior; error handling; and measured speed.
 
 **Out of scope:** medical interpretation, a graphical 3D editor, unsupported NRRD variants, other polygon shapes, and guarantees about performance on hardware that has not been measured.
 
 ### Test environments and dependencies
 
-- Python **3.10+**, with dependencies from `requirements.txt` (`numpy`, `opencv-python-headless`, `pytest`; `pynrrd` is an optional cross-check).
-- Tests are run from the repository root. The committed `volproj/` package and `tests/` directory must be available.
+- Python **3.10+**, with dependencies from [requirements.txt](requirements.txt): NumPy, imageio, imageio-ffmpeg, and pytest. Neither OpenCV nor pynrrd is used by the current suite.
+- Tests are run from the repository root with the [volume_projection/](volume_projection/) package and [tests/](tests/) directory available.
 - Use small synthetic volumes for most correctness tests; use **500³ `uint8`** for the assignment performance test.
-- Record operating system, CPU, Python/NumPy/OpenCV versions, and benchmark settings with performance results.
+- Record operating system, CPU, memory, Python/NumPy/imageio/FFmpeg versions, and benchmark settings with performance results.
 
 ## 2. Testing levels
 
 | Level | Purpose | Main evidence |
 |---|---|---|
-| **Unit tests** | Check small components independently (geometry, readers, sampling, projection). | `tests/test_geometry.py`, `test_plane.py`, `test_nrrd_reader.py`, `test_csv_reader.py`, `test_projector.py` |
-| **Integration tests** | Check that parsing, projection, scaling, layout, and writing work together. | `tests/test_pipeline.py` |
-| **End-to-end / CLI tests** | Run `Ex0.py` with actual input files, check output and failure behavior. | `tests/test_cli.py`, `tests/test_pipeline.py`, demo procedure below |
-| **Performance tests** | Measure FPS separately for the projection stage, processing stage, and optional video encoding. | `benchmark.py`, `tests/test_benchmark.py` |
+| **Unit tests** | Check geometry, readers, sampling, projection, and intensity conversion. | [test_geometry.py](tests/test_geometry.py), [test_io.py](tests/test_io.py), [test_projection.py](tests/test_projection.py), [test_video_and_cli.py](tests/test_video_and_cli.py) |
+| **Integration tests** | Check parsing, projection, conversion, layout, frame count, and ordering together. | [test_video_and_cli.py](tests/test_video_and_cli.py) |
+| **End-to-end / CLI tests** | Run the entry point with temporary synthetic input files; check success and missing-file behavior. | [test_video_and_cli.py](tests/test_video_and_cli.py) |
+| **Performance measurement** | Measure projection and optional encoding; time processing without encoding separately. | [benchmarks/benchmark.py](benchmarks/benchmark.py); no dedicated benchmark pytest module exists |
 | **Manual demo review** | Confirm that the produced MP4 plays and shows meaningful changes across the sequence. | Demo checklist and recorded observations |
 
 The test cases are **not** a replacement for the manual demo required in the assignment.
 
 ## 3. Requirements-to-tests traceability
 
-The requirement IDs below match the supplied `SRS.md`. `T-01`–`T-08` are the existing test groups used in the README; extra verification is listed where needed.
+The requirement IDs and `T-01`–`T-08` groups below match [SRS.md](SRS.md).
+File presence describes available coverage, not proof that a test passed.
 
 | SRS ID | What must be shown | Test group / existing file(s) | Pass criterion |
 |---|---|---|---|
-| **FR-01** | Load supported 3D NRRD volumes. | **T-01** — `test_nrrd_reader.py` | Shape, voxel type, byte order, and values are read correctly; unsupported input is rejected. |
-| **FR-02** | Parse 3- or 4-point CSV planes. | **T-02** — `test_csv_reader.py` | 9-number triangles and 12-number trapezoids are parsed in source order. |
-| **FR-03** | Validate isosceles triangles. | **T-02** — `test_plane.py` | Valid triangles are accepted; scalene and degenerate triangles are rejected. |
-| **FR-04** | Validate trapezoid geometry. | **T-02** — `test_plane.py` | Equal side lengths (EPS), base-length rule, and coplanarity are checked. |
-| **FR-05** | Calculate the required 2D projection. | **T-03** — `test_projector.py`, `reference_projector.py` | Pixels and image sizes match known cases and independent reference calculations exactly. |
-| **FR-06** | Assign zero outside the volume. | **T-04** — `test_projector.py` | Partly/fully outside samples produce `0`, while valid inside samples remain correct. |
-| **FR-07** | Keep plane order in the output. | **T-05** — `test_pipeline.py` | One frame per valid plane in the same order as the CSV (strict/default mode). |
-| **FR-08** | Generate an MP4 file. | **T-05** — `test_pipeline.py`, `test_cli.py` | The file exists, decodes, and has the expected number of frames. |
-| **FR-09** | Support the exact three-argument CLI. | **T-06** — `test_cli.py` | `python Ex0.py file.nrrd file.csv file.mp4` returns success and writes a video. |
-| **FR-10** | Handle invalid input predictably. | **T-08** — `test_cli.py`, `test_csv_reader.py`, `test_nrrd_reader.py`, `test_pipeline.py` | Useful message identifies the cause; failures do not leave a misleading partial output. |
-| **NFR-01** | Measure projection speed. | **T-07** — `benchmark.py`, `test_benchmark.py` | Actual FPS is recorded for 500³ `uint8`; **>30** required, **≥100** target, separately marked. |
+| **FR-01** | Load supported 3D NRRD volumes. | **T-01** — [test_io.py](tests/test_io.py) | Dimensions, voxel type, byte order, encoding, and values are correct. |
+| **FR-02** | Parse 3- or 4-point CSV planes. | **T-02** — [test_io.py](tests/test_io.py) | Both required-header formats parse 13-column rows in source order; triangles leave their final three cells empty. |
+| **FR-03** | Validate isosceles triangles. | **T-02** — [test_geometry.py](tests/test_geometry.py) | Valid isosceles/equilateral triangles accepted; unequal legs and degenerate geometry rejected. |
+| **FR-04** | Validate trapezoid geometry. | **T-02** — [test_geometry.py](tests/test_geometry.py) | Strict leg tolerance, base ordering with eight-ULP allowance, and perpendicular-distance coplanarity agree with the algorithm. |
+| **FR-05** | Calculate the required 2D projection. | **T-03** — [test_projection.py](tests/test_projection.py), [reference_projection.py](tests/reference_projection.py) | Dtype, dimensions, and raw pixels match known/reference results exactly. |
+| **FR-06** | Assign raw zero outside the volume. | **T-04** — [test_projection.py](tests/test_projection.py) | Original coordinates are checked before rounding; outside samples are zero. |
+| **FR-07, FR-08** | Preserve order and generate MP4. | **T-05** — [test_video_and_cli.py](tests/test_video_and_cli.py) | Decode expected frame count/order on a shared even-sized canvas. |
+| **FR-09** | Support the three-argument CLI. | **T-06** — [test_video_and_cli.py](tests/test_video_and_cli.py) | Valid inputs return success and create a video. |
+| **FR-10** | Handle invalid input predictably. | **T-08** — [test_io.py](tests/test_io.py), [test_video_and_cli.py](tests/test_video_and_cli.py) | Readable errors; an invalid CSV preserves existing output. Other failure scenarios below still require targeted verification. |
+| **NFR-01** | Measure projection speed. | **T-07** — [benchmark](benchmarks/benchmark.py) | Actual median FPS for 500³ `uint8`: **>30** required, **≥100** target; other stages reported separately. |
 | **NFR-02** | Prove correctness. | **T-02–T-05** — geometry, projection, pipeline tests | Deterministic expected results and reference comparisons agree. |
 | **NFR-03** | Recover cleanly from errors. | **T-08** — failure tests | Controlled exit, readable error, and cleanup of incomplete output. |
 | **NFR-04** | Maintain a testable, modular design. | Code review + isolated tests | Geometry, file I/O, projection, and encoding can be tested independently. |
-| **NFR-05** | Make the CLI usable. | **T-06, T-08** — `test_cli.py` | Documented command works; incorrect usage produces understandable feedback. |
+| **NFR-05** | Make the CLI usable. | **T-06, T-08** — [test_video_and_cli.py](tests/test_video_and_cli.py), manual GUI review | Three supplied paths run the CLI; missing paths trigger file selection when Tkinter is available. |
 
-> **File-location note:** Test files supplied for this review are shown above under their intended `tests/` paths. Verify that the GitHub repository actually uses these paths. The supplied README also mentions `test_volume.py` and `test_video.py`, which were **not present in the uploaded set**; do not claim those files exist until verified.
+> The following scenarios are acceptance checks. Some are covered by current tests; others need additional checks. In particular, a simulated encoder failure, GUI interaction, and a standalone manual demo are not established by the recorded automated run.
 
 ## 4. Key test scenarios
 
@@ -85,7 +85,8 @@ The requirement IDs below match the supplied `SRS.md`. `T-01`–`T-08` are the e
 | **C-06** | Plane fully outside the volume | Black projection (all zeros). |
 | **C-07** | Multiple planes with different image sizes | Frames centered on a common canvas without resizing. |
 | **C-08** | Multiple distinct CSV rows | Video frames appear in exactly the same order. |
-| **C-09** | Fractional coordinates at rounding boundaries | Deterministic round-half-up/nearest-neighbor behavior. |
+| **C-09** | Fractional coordinates at rounding boundaries | Nearest-neighbor with ties-to-even rounding; out-of-bounds coordinates remain zero even if rounding would bring them inside. |
+| **C-10** | Signed-int16 frames | Nonnegative frames scale by frame maximum; frames containing negatives use the offset/right-shift mapping, where raw zero becomes gray 128. Added canvas padding stays black. |
 
 ### 4.2 Invalid inputs and failure handling
 
@@ -100,14 +101,14 @@ The requirement IDs below match the supplied `SRS.md`. `T-01`–`T-08` are the e
 | **E-07** | Bad output path or error during video writing | Failure is reported; incomplete video is removed. |
 | **E-08** | Invalid CSV row in default strict mode | Run stops with a line-numbered error; no video is produced. |
 
-**Design-choice check:** The optional `--skip-invalid` mode is an extra feature, **not** the default assignment behavior. If it is used, report skipped lines and verify the retained rows remain in their original order.
+**Design-choice check:** There is no skip-invalid mode. All nonblank CSV rows must be valid before encoding starts. The required header and 13-column formats are specified in [SRS.md](SRS.md#32-external-interfaces). Reject projected images larger than 20,000,000 pixels before allocating them.
 
 ## 5. How correctness is verified
 
 Use **two independent checks**, whenever possible:
 
 1. **Hand-checked examples:** A known volume has easily predicted voxel values. For example, an axis-aligned rectangle should reproduce the corresponding volume slice, and a simple triangle should yield known pixels.
-2. **Reference comparison:** `tests/reference_projector.py` is a separate, slower row-by-row algorithm. Compare its entire output matrix to the optimized `PlaneProjector` output, including dtype, dimensions, pixel values, and boundary behavior.
+2. **Reference comparison:** [reference_projection.py](tests/reference_projection.py) is a separate, slower row-by-row algorithm. Compare its entire output matrix to the optimized projector output, including dtype, dimensions, pixel values, and boundary behavior.
 
 These comparisons are stronger than checking only whether an image is nonempty. Tests should also verify **repeatability** (same input → same output) and that projection does **not modify** the source volume.
 
@@ -125,29 +126,30 @@ python Ex0.py file.nrrd file.csv file.mp4
 
 ```bash
 # Install dependencies (once)
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
-# Generate a small example NRRD, CSV, and MP4 with the project helper
-python make_example_data.py
-
-# Or run the required entry point with your own dataset
-python Ex0.py examples/phantom.nrrd examples/planes.csv examples/demo.mp4
+# Supply existing NRRD/CSV files and an existing output directory
+python Ex0.py input.nrrd planes.csv output.mp4
 ```
 
-`make_example_data.py` is configured to create a **64³ synthetic `uint16` volume**, **24 planes** (triangles and trapezoids), and a demo video under `examples/`. If the repository does not contain those files yet, run the generator first. Use the project's **actual paths** when reporting results.
+The filenames above are placeholders. This checkout currently has no bundled
+example dataset or demo generator. Record the actual dataset shape, dtype,
+CSV row count, and paths used for a standalone demo. The CLI and integration
+tests generate their own synthetic NRRD/CSV inputs in temporary directories;
+they do not depend on bundled examples.
 
 ### Demo acceptance checklist
 
 -  Command exits successfully (exit code `0`).
 -  Output `.mp4` exists and can be opened in a video player.
--  Number of decoded frames equals the number of **valid** input plane rows (24 for the generated demo).
+-  Number of decoded frames equals the number of nonblank input plane rows; all rows must be valid.
 -  Frame order matches the CSV row order; compare pre-encoding frames where exact validation is needed.
 -  Frames show changing cross-sections; no unexpected blank or corrupted frames.
 -  Video width and height remain constant even when plane sizes differ.
--  If any planes cross the volume boundary, outside pixels appear black.
+-  Out-of-volume raw pixels are zero. Check their display values against the unsigned/signed conversion rules in [ALGORITHM.md](ALGORITHM.md#7-processing-the-csv-and-creating-the-video).
 -  Record the command, input filenames, output filename, and one or two representative screenshots or frames.
 
-**Note:** A successful demo on a 64³ volume proves the full pipeline works, **not** that the 500³ FPS requirement is met. That needs a separate benchmark.
+**Note:** A successful standalone demo verifies that dataset's pipeline run. The 500³ `uint8` FPS requirement needs the separate benchmark below.
 
 ## 7. Performance-test procedure (NFR-01)
 
@@ -172,7 +174,7 @@ The measurements cover three stages. The current benchmark reports projection an
 - Mark **> 30 FPS** as the required threshold and **≥ 100 FPS** as the expected target. Do not confuse the two.
 - Record **plane size and type**: bigger 2D images may process more slowly even for the same 500³ volume.
 - Record machine and software information; do not generalize measured results to all computers.
-- Report the three stages separately. **30 FPS MP4 playback does not prove 30 FPS processing speed.**
+- Report the three stages separately. The program's **10 FPS MP4 playback rate does not establish processing throughput**.
 - Never put hard-coded “PASS” results in the report; decide from actual measured output.
 
 ### Performance results (measured 2026-11-08)
@@ -181,7 +183,7 @@ The measurements cover three stages. The current benchmark reports projection an
 |---|---|
 | Date and OS | 2026-11-08 (Asia/Jerusalem); Windows 11 Home, 64-bit, build 10.0.26300 |
 | CPU / memory | 13th Gen Intel Core i9-13900HX; 24 cores / 32 logical processors; 15.75 GiB usable physical RAM (16,907,100,160 bytes) |
-| Python / NumPy / OpenCV versions | Python 3.13.14 / NumPy 2.5.4 / OpenCV not used by this checkout; imageio 2.38.1, imageio-ffmpeg 0.6.0, FFmpeg 7.1, pytest 9.1.1 |
+| Software versions | Python 3.13.14 / NumPy 2.5.4 / imageio 2.38.1 / imageio-ffmpeg 0.6.0 / FFmpeg 7.1 / pytest 9.1.1 |
 | Volume | `500 × 500 × 500`, `uint8`; deterministic random data, seed `2026` |
 | Plane count / repeats | `200` / `5` for each stage |
 | Plane type | In-bounds isosceles triangles on successive Z slices (`z=0..199`), from `benchmarks.benchmark.make_planes(500, 200)` |
@@ -189,12 +191,12 @@ The measurements cover three stages. The current benchmark reports projection an
 | Projection median FPS | **36.64** (best: 39.95) |
 | Processing median FPS | **37.85** (best: 39.29) |
 | End-to-end median FPS | **33.36** (best: 34.52) |
-| Required threshold (>30 FPS) | **PASS** — processing median 37.85 FPS; projection and end-to-end medians also exceed 30 FPS |
+| Required threshold (>30 FPS) | **PASS** — projection median 36.64 FPS; processing and end-to-end medians also exceed 30 FPS |
 | Expected target (≥100 FPS) | **NOT MET** — all three measured medians are below 100 FPS |
 
 Measured from the current checkout at `C:/Users/dolev/.vscode/New folder/OOP-OOD-Ex1-3D-Volume-Projection`. These results apply to this machine and triangle workload; other plane sizes, orientations, or system load may produce different speeds.
 
-The current checkout uses `benchmarks/benchmark.py` and imageio/FFmpeg, rather than the older root-level benchmark and OpenCV described elsewhere in this plan. It has no `--dtype` or `--repeats` flags: `uint8` is fixed, and repetition was performed by a temporary measurement runner calling `benchmarks.benchmark.run(500, 200, True, output_path)` five times, sequentially.
+The checkout uses [benchmarks/benchmark.py](benchmarks/benchmark.py) and imageio/FFmpeg. The benchmark has no `--dtype` or `--repeats` flags: `uint8` is fixed, and repetition was performed by a temporary measurement runner calling `benchmarks.benchmark.run(500, 200, True, output_path)` five times, sequentially. These are preserved measurements from the earlier 2026-11-08 run, not a new performance run during documentation synchronization.
 
 Projection and end-to-end values below are the benchmark's actual outputs. Processing was separately timed with `time.perf_counter()` around 200 calls to `video.prepare_frame(projector.project(plane))`, using the same seeded volume, planes, and canvas, with one warm-up frame per pass. Allocation, geometry setup, and warm-up were excluded. End-to-end timing includes opening, writing, and closing the H.264 MP4, but excludes input generation/loading. The three stages were timed separately; processing includes extra work, but independent timing and machine variation can make its measured FPS higher than projection FPS. MP4 playback is 10 FPS and is unrelated to measured throughput.
 
@@ -208,53 +210,61 @@ Projection and end-to-end values below are the benchmark's actual outputs. Proce
 
 Medians and best values above are calculated across these five passes.
 
-> The README includes example measurements from a development environment, but **those numbers are not a substitute for running the benchmark on the submission machine**.
+> The README summarizes this same measurement record. Results are specific to the recorded machine and workload; remeasure after code, hardware, or workload changes.
 
 ## 8. Running the automated tests
 
 ```bash
 # All tests configured by pytest.ini
-pytest
+python -m pytest -q
 
 # Extra detail
-pytest -v
+python -m pytest -v
 
 # Examples of targeted checks
-pytest tests/test_projector.py -v
-pytest tests/test_pipeline.py tests/test_cli.py -v
+python -m pytest tests/test_projection.py -v
+python -m pytest tests/test_geometry.py tests/test_io.py tests/test_video_and_cli.py -v
 
-# Validate benchmark tooling (not actual speed thresholds)
-pytest tests/test_benchmark.py -v
+# Diagnose remaining modules when one module fails to collect
+python -m pytest -q --continue-on-collection-errors
 ```
 
-The benchmark test file checks that timing and reporting work; it **does not enforce a real-time FPS threshold inside pytest**, because shared or loaded machines make timing assertions unreliable. The real performance decision comes from a separately recorded benchmark run.
+The current suite has no dedicated benchmark test module and does not enforce FPS thresholds. Performance acceptance comes from the separately recorded benchmark. The continue-on-collection-errors command still exits unsuccessfully if collection fails; it must not be reported as a full suite pass.
 
 ### Test execution record (2026-11-08)
 
 | Item | Result |
 |---|---|
-| `pytest` command/date | 2026-11-08: `python -m pytest -q` stopped during collection (exit 1); `python -m pytest -q --continue-on-collection-errors` ran the remaining tests (exit 1) |
-| Passed | **88** in the second run (4.52 seconds) |
-| Failed | **0 executed test failures; 1 collection error** — the full suite did not pass |
-| Skipped | **0 reported**; tests in the projection module could not be collected and are not counted as passes or skips |
-| Demo command and output | Standalone manual demo not run during this measurement; CLI/video tests are included in the 88 passes, and five benchmark MP4 exports completed successfully |
-| Open issues | `tests/test_projection.py:5` imports private NumPy names `_Array` and `_Array1D`; `_Array` cannot be imported from `numpy._core.multiarray` with NumPy 2.5.4. Projection-module tests remain unverified. The 100 FPS target was not met. Several paths and dependency descriptions elsewhere in this plan refer to an older project layout. |
+| `pytest` command/date | 2026-11-08: `python -m pytest -q` completed successfully (exit 0) after fixing the projection test annotations. |
+| Passed | **148** in **2.61 seconds**, including all **60 projection tests** |
+| Failed | **0 failures; 0 collection errors** |
+| Skipped | **0** |
+| Demo command and output | Standalone manual demo not run during this verification; CLI/video tests are included in the 148 passes. Five benchmark MP4 exports completed during the earlier performance measurement. |
+| Open issues | The ≥100 FPS target was not met, and a standalone manual demo is still unverified. No automated test failures remain in this run. |
 
-Both test commands used the same checkout and Python environment as the performance measurements. No source or test code was changed for this run.
+The test commands used the same checkout and Python environment as the
+performance measurements. Earlier runs passed 88 tests but could not collect
+the projection module because it imported private NumPy types `_Array` and
+`_Array1D`. The fix removed that import and replaced the two affected parameter
+annotations with public `np.ndarray`. No production algorithm, test inputs,
+or assertions changed. The newly collected 60 projection tests all passed.
+The earlier algorithm review also passed **216 direct scalar-reference
+comparisons** across unsigned bit depths, seeded rotations, and array layouts;
+the full suite now executes the corresponding reference-comparison tests too.
 
-If tests are skipped (for example, an optional `pynrrd` cross-check), **report them separately** rather than counting them as passes. Include a short explanation for every failure.
+If tests are skipped, report them separately rather than counting them as passes. Collection errors are a separate category and must not be counted as skips. Include a short explanation for every failure.
 
 ## 9. Overall exit criteria and deliverables
 
 The project is ready for submission when:
 
 - [ ] The checked-in code matches the behavior described in `SRS.md`.
-- [ ] Required correctness, integration, and CLI tests pass on the submission environment.
+- [x] The current automated correctness, integration, and CLI tests pass on the recorded environment (148 tests).
 - [ ] The required three-argument CLI produces a decodable MP4 with correctly ordered frames.
 - [ ] Error-handling tests show controlled failures without misleading partial outputs.
-- [ ] A real 500³ `uint8` benchmark result is documented and checked against **>30 FPS**, with the **100+ FPS target** reported separately.
+- [x] A real 500³ `uint8` benchmark result is documented and checked against **>30 projection FPS**, with the **≥100 FPS target** reported separately as not met.
 - [ ] A short experiment summary states the dataset, command, outputs, observations, and limitations.
-- [ ] The committed repository contains the referenced test files and a reproducible demo or instructions to generate it.
+- [ ] A representative dataset and reproducible standalone demo are supplied for submission; the current checkout has no bundled demo dataset.
 
 ### Evidence to keep with the submission
 
@@ -267,5 +277,5 @@ The project is ready for submission when:
 ---
 
 **Source of requirements:** Ariel University Ex1 handout and the project's `SRS.md`.  
-**Source of test coverage:** The supplied README, `benchmark.py`, `make_example_data.py`, and Python test files.  
-**Important:** Checklists and blank result tables are intentionally **not pre-marked as passed**. They must be completed from actual execution before submission.
+**Source of test coverage:** [tests/](tests/), [benchmarks/benchmark.py](benchmarks/benchmark.py), and the execution record above.\
+**Important:** Only evidence-backed checklist items are marked complete. Unchecked items require verification before submission.
