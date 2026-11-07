@@ -25,5 +25,5 @@ python benchmark.py --encode # Measure projection and video performance
 
 - [SRS.md](SRS.md) — Software requirements
 - [TEST_STRATEGY.md](TEST_STRATEGY.md) — Testing approach and acceptance criteria
-
+- [ALGORITHM.md](ALGORITHM.md) - The algorithm of the project  
 **Performance goal:** More than 30 FPS required; 100+ FPS targeted on a 500×500×500 8-bit volume. Actual results depend on the machine and test settings.
